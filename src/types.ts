@@ -13,6 +13,9 @@ export type HealthState =
 
 export type Tier = "free" | "opencode-go" | "deepseek/zai" | "payg";
 
+/** Capability-based routing classes (metadata-driven, provider-independent). */
+export type RoutingClass = "manager" | "coding" | "reasoning" | "coding_agent";
+
 /** One model in the OpenRouter live catalog (subset of fields we actually use). */
 export interface CatalogModel {
   id: string;
@@ -146,6 +149,14 @@ export interface RouterConfig {
   agentCapability: Record<string, string>;
   providers: Record<string, { providerID: string; tier: Tier; label: string }>;
   providerHealth: Record<string, HealthState>;
+  /** Agent -> capability routing class (Step 2). */
+  agentClass?: Record<string, RoutingClass>;
+  /** Routing tunables (Step 2). */
+  routing?: {
+    healthThresholdPct: number;
+    randomizeFallbacks: boolean;
+    topK: number;
+  };
 }
 
 /** A computed fallback chain decision. */

@@ -57,6 +57,18 @@ export function baseConfig(): RouterConfig {
       "deepseek/zai": "CONFIGURATION_ERROR",
       payg: "DISABLED",
     },
+    agentClass: {
+      manager: "manager",
+      planner: "reasoning",
+      builder: "coding_agent",
+      coder: "coding",
+      debugger: "reasoning",
+      tester: "coding",
+      quant: "reasoning",
+      reviewer: "reasoning",
+      chat: "manager",
+    },
+    routing: { healthThresholdPct: 95, randomizeFallbacks: true, topK: 4 },
   };
 }
 

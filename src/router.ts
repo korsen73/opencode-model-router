@@ -9,6 +9,8 @@ import { discoverModels, fetchModels, markStale, type FetchLike } from "./discov
 import { filterModel, filterPreferred as filterByCap, type Filtered } from "./filter.ts";
 import { classifyWithOverrides } from "./classify.ts";
 import { enrichRegistryModel } from "./catalog.ts";
+import { rankForClass, selectTop4, classForAgent } from "./model-manager.ts";
+import { getEndpointHealth, bestUptime5m } from "./health.ts";
 import { decideProvider } from "./fallback.ts";
 import { loadHealth, saveHealth, defaultHealthFile, effectiveState } from "./health.ts";
 import { recordUsage } from "./usage.ts";
@@ -21,6 +23,7 @@ import type {
   RegistryFile,
   RegistryModel,
   RouterConfig,
+  RoutingClass,
   Tier,
   UsageFile,
 } from "./types.ts";
@@ -291,6 +294,76 @@ export async function diagnostics(fetchFn?: FetchLike): Promise<object> {
     out.catalogProbe = { ok: false, error: (err as Error).message };
   }
   return out;
+}
+
+/**
+ * Compute the Top N per routing class for a set of models, using endpoint
+ * health (uptime) to filter, with controlled fallback randomization.
+ */
+export async function top4ForClass(
+  config: RouterConfig,
+  cls: RoutingClass,
+  opts: { models?: RegistryModel[]; fetchFn?: FetchLike; healthyIds?: Set<string>; freeOnly?: boolean } = {},
+): Promise<ReturnType<typeof selectTop4>> {
+  // Default to Free-only while PAYG is disabled (the intended routing goal:
+  // Free first). Set freeOnly:false to include paid models.
+  const freeOnly = opts.freeOnly ?? !config.payg.enabled;
+  let models = opts.models ?? (await loadRegistry()).discovered;
+  if (freeOnly) models = models.filter((m) => m.isFree);
+  const routing = config.routing ?? { healthThresholdPct: 95, randomizeFallbacks: true, topK: 4 };
+  let healthyIds: Set<string> | null = opts.healthyIds ?? null;
+  if (!healthyIds) {
+    healthyIds = new Set<string>();
+    for (const m of models) {
+      try {
+        const { endpoints } = await getEndpointHealth(m.id, config, opts.fetchFn);
+        const up = bestUptime5m(endpoints);
+        if (up == null || up >= routing.healthThresholdPct) healthyIds.add(m.id);
+      } catch {
+        healthyIds.add(m.id); // optimistic on health failure
+      }
+    }
+  }
+  return selectTop4(models, cls, routing.topK, healthyIds, routing.randomizeFallbacks);
+}
+
+/**
+ * Class-based decision: uses the capability-based Model Manager to select the
+ * primary + fallback chain for an agent's routing class. Returns the same
+ * Decision shape as `decide` so the plugin can inject it.
+ */
+export async function decideByClass(
+  config: RouterConfig,
+  agent: string,
+  opts: { fetchFn?: FetchLike } = {},
+): Promise<Decision> {
+  const t = await top4ForAgent(config, agent, opts);
+  if (!t.primary) {
+    return {
+      agent, capability: "unknown", provider: "free", providerID: "openrouter",
+      model: "", chain: [], didFallback: false, reason: "no suitable Free model for class",
+      estimatedCostUSD: 0, isFree: true, executable: false,
+    };
+  }
+  const cls = classForAgent(config, agent);
+  return {
+    agent, capability: cls === "coding" ? "coding" : "reasoning",
+    provider: "free", providerID: "openrouter",
+    model: t.primary.id,
+    chain: t.fallbacks.map((m) => m.id),
+    didFallback: t.fallbacks.length > 0,
+    reason: `class-${cls}-free-selected`,
+    estimatedCostUSD: 0, isFree: true, executable: true,
+  };
+}
+
+/** Top 4 for an agent's routing class. */
+export async function top4ForAgent(
+  config: RouterConfig,
+  agent: string,
+  opts: { models?: RegistryModel[]; fetchFn?: FetchLike } = {},
+): Promise<ReturnType<typeof selectTop4>> {
+  return top4ForClass(config, classForAgent(config, agent), opts);
 }
 
 export { recordUsage };

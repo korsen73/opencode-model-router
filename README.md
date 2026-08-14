@@ -54,6 +54,25 @@ locally-observed usage.
   and would only reflect the *intended* primary, not the model OpenRouter
   actually executed on after server-side fallback. Known limitation; left as-is.
 
+### Model Manager (Step 2) — capability-based routing
+- **Catalog**: retains raw OpenRouter metadata (canonical_slug, description, created,
+  expiration_date, top_provider, reasoning, architecture) + `benchmarks.artificial_analysis`
+  scores. `normalizeModel()` derives provider-independent capabilities (tools, reasoning,
+  structured_outputs, modalities, context). Missing AA scores stay `null` (never coerced to 0,
+  never name-inferred).
+- **4 routing classes**: `manager`, `coding`, `reasoning`, `coding_agent`. Ranking uses official
+  AA indices (intelligence/coding/agentic) — NOT model names. Deterministic tie-breakers:
+  primary score → secondary score → tools → context → stable id.
+- **Availability-aware**: per-model endpoint health (`/api/v1/models/{author}/{slug}/endpoints`,
+  TTL `endpointHealthTtlSeconds`) filters/prefers healthy models (uptime >= `healthThresholdPct`).
+- **Controlled randomization**: the primary is deterministic (best healthy by rank); the 3
+  fallbacks are shuffled for diversity (`routing.randomizeFallbacks`). Old `randomizeFreeModels`
+  full-shuffle is superseded.
+- **Selection**: Free-first by default while PAYG is disabled (`freeOnly`). `top4` CLI shows the
+  live Top 4 per class. The plugin uses `decideByClass` (capability-based) instead of the legacy
+  `decide`.
+- Agent → class mapping in `config.json` (`agentClass`).
+
 ### FUTURE
 - Refresh virtual models periodically (not just at plugin load / catalog refresh).
 - Health-based Free upstream selection before building the chain.
