@@ -24,7 +24,10 @@ locally-observed usage.
   the expected Free upstream).
 - Per-request randomized Free fallback chain is injected via `chat.params` →
   `output.options.models` (OpenRouter server-side `models` array). Verified.
-  The chain is hard-capped at 3 items (`OPENROUTER_MODELS_MAX`); OpenRouter
+  The candidate chain holds up to 4 (`CANDIDATE_CHAIN_MAX` = primary + 3
+  fallbacks); the injected `models[]` array is the candidate chain **minus the
+  request's primary model**, clamped to 3 (`OPENROUTER_MODELS_MAX`). This avoids
+  wasting a fallback slot on the model OpenRouter already tries first. OpenRouter
   rejects longer `models[]` arrays (live-verified HTTP 400).
 - Actual model+provider+cost observed via the `event` hook and logged.
 - Coding Free models are correctly classified (explicit coding signal before the
@@ -161,10 +164,13 @@ Verified: 15 free models detected from the live catalog.
 
 ## Randomization
 Fisher-Yates unbiased shuffle over the Free pool only (when enabled), truncated to
-`maxFreeModelsPerChain`, which is hard-clamped to **3** (`OPENROUTER_MODELS_MAX`)
-regardless of config — OpenRouter's native `models` fallback array rejects more
-than 3 items (live-verified HTTP 400: "'models' array must have 3 items or
-fewer."). Verified unbiased and duplicate-free by unit tests.
+a candidate chain of at most **4** (`CANDIDATE_CHAIN_MAX` = primary + 3 real
+fallbacks). The **injected** `models[]` array is the candidate chain minus the
+request primary model, then clamped to **3** (`OPENROUTER_MODELS_MAX`) — OpenRouter's
+native `models` fallback array rejects more than 3 items (live-verified HTTP 400:
+"'models' array must have 3 items or fewer."). Excluding the primary means all 3
+injected slots are genuine fallbacks (OpenRouter tries the primary `model` field
+first). Verified unbiased, duplicate-free, and primary-excluded by unit tests.
 
 ## Fallback logic
 1. Free tier → randomized chain of free models (OpenRouter server-side failover).

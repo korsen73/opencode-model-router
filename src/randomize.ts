@@ -13,6 +13,13 @@ import type { Filtered } from "./filter.ts";
  * can never produce a rejected request.
  */
 export const OPENROUTER_MODELS_MAX = 3;
+// Candidate chain capacity: primary + up to 3 real fallbacks. OpenRouter caps
+// the injected models[] array at OPENROUTER_MODELS_MAX (3), and the plugin
+// removes the primary before injection, so the candidate chain may hold
+// OPENROUTER_MODELS_MAX + 1 = 4 (the primary + 3 non-primary fallbacks). This
+// ensures the injected array can still carry 3 real fallbacks after the
+// primary is excluded.
+export const CANDIDATE_CHAIN_MAX = OPENROUTER_MODELS_MAX + 1;
 
 export interface RandomizeOptions {
   enabled: boolean;
@@ -25,11 +32,12 @@ export interface RandomizedChain {
 }
 
 /**
- * Build a Free chain. If randomization is enabled, the whole free pool is
- * Fisher-Yates shuffled (unbiased, no duplicates) before being truncated.
- * The final chain length is ALWAYS clamped to OPENROUTER_MODELS_MAX (3),
- * regardless of `opts.maxChain`, as a defensive invariant against
- * OpenRouter's server-side limit.
+ * Build a candidate Free chain. If randomization is enabled, the whole free
+ * pool is Fisher-Yates shuffled (unbiased, no duplicates) before being
+ * truncated. The chain may hold up to CANDIDATE_CHAIN_MAX (4) = the primary
+ * plus up to 3 real fallbacks. The plugin excludes the primary and clamps the
+ * INJECTED models[] array to OPENROUTER_MODELS_MAX (3), OpenRouter's server-
+ * side limit.
  */
 export function buildFreeChain(pool: Filtered[], opts: RandomizeOptions): RandomizedChain {
   // Deduplicate by model id first.
@@ -45,13 +53,35 @@ export function buildFreeChain(pool: Filtered[], opts: RandomizeOptions): Random
     shuffle(deduped);
   }
 
-  // Clamp to the hard OpenRouter limit (defensive, config-independent).
-  const cap = Math.min(opts.maxChain, OPENROUTER_MODELS_MAX);
+  // Candidate chain capacity: allow primary + fallbacks, but never exceed the
+  // hard ceiling. The injected models[] array is capped separately (to
+  // OPENROUTER_MODELS_MAX) by the plugin after removing the primary.
+  const cap = Math.min(opts.maxChain + 1, CANDIDATE_CHAIN_MAX);
   const truncated = deduped.length > cap;
   return {
     models: deduped.slice(0, cap),
     truncated,
   };
+}
+
+/**
+ * Build the INJECTED OpenRouter `models[]` fallback array from a candidate
+ * chain. OpenRouter tries the primary `model` field first, then this array in
+ * order as fallbacks. To avoid wasting a slot on the model OpenRouter already
+ * tries as the primary, the primary is excluded. The result is clamped to
+ * OPENROUTER_MODELS_MAX (3) and deduplicated.
+ */
+export function buildInjectedFallbacks(chain: string[], primary?: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of chain) {
+    if (primary && id === primary) continue; // skip the request primary
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= OPENROUTER_MODELS_MAX) break;
+  }
+  return out;
 }
 
 /** Count distribution check helper for tests: returns an array of picks. */

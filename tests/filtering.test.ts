@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { baseConfig, freeFixtures, makeModel, paidFixture } from "./helpers.ts";
 import { isFreeByPricing, filterModel, classifyCapability, type Filtered } from "../src/filter.ts";
 import { filterPreferred } from "../src/preferences.ts";
-import { buildFreeChain, shuffle } from "../src/randomize.ts";
+import { buildFreeChain, buildInjectedFallbacks, shuffle } from "../src/randomize.ts";
 import { buildChain, decideProvider } from "../src/fallback.ts";
 import type { RouterConfig } from "../src/types.ts";
 
@@ -115,9 +115,11 @@ test("CASE 4b: fisher-yates no duplicates and complete", () => {
   }
 });
 
-// CASE 4c: chain length is hard-clamped to OPENROUTER_MODELS_MAX (3),
-// regardless of the config value. OpenRouter rejects >3-item models[] arrays.
-test("CASE 4c: buildFreeChain clamps to OPENROUTER_MODELS_MAX (3) even when config is larger", () => {
+// CASE 4c: candidate chain is capped at CANDIDATE_CHAIN_MAX (4) = primary +
+// up to 3 real fallbacks, regardless of a larger config value. The INJECTED
+// models[] array is separately clamped to OPENROUTER_MODELS_MAX (3) after the
+// primary is excluded (see buildInjectedFallbacks).
+test("CASE 4c: buildFreeChain caps candidate chain at CANDIDATE_CHAIN_MAX (4) even when config is larger", () => {
   const pool = toFiltered(
     filterModel(freeFixtures[0], cfg), // qwen
     filterModel(freeFixtures[1], cfg), // deepseek-r1
@@ -125,10 +127,25 @@ test("CASE 4c: buildFreeChain clamps to OPENROUTER_MODELS_MAX (3) even when conf
     filterModel(makeModel({ id: "extra/one:free", supported_parameters: ["tools"] }), cfg),
     filterModel(makeModel({ id: "extra/two:free", supported_parameters: ["tools"] }), cfg),
   );
-  // 5 distinct models, config says allow 5, but the hard ceiling is 3.
+  // 5 distinct models, config says allow 5, but the candidate ceiling is 4.
   const chain = buildFreeChain(pool, { enabled: false, maxChain: 5 });
-  assert.ok(chain.models.length <= 3, `should clamp to 3, got ${chain.models.length}`);
+  assert.ok(chain.models.length <= 4, `should cap at 4, got ${chain.models.length}`);
   assert.equal(chain.truncated, true);
+});
+
+// CASE 4d: buildInjectedFallbacks excludes the primary, clamps to 3, no dupes.
+test("CASE 4d: buildInjectedFallbacks excludes primary and clamps to OPENROUTER_MODELS_MAX (3)", () => {
+  const chain = ["a", "b", "c", "d", "a", "e"];
+  // primary "a" excluded; remaining b,c,d,e -> clamp to 3; dedup.
+  const inj = buildInjectedFallbacks(chain, "a");
+  assert.deepEqual(inj, ["b", "c", "d"]);
+  assert.ok(inj.length <= 3);
+  assert.equal(new Set(inj).size, inj.length, "duplicates in injected");
+  // no primary present -> still clamps to 3
+  const inj2 = buildInjectedFallbacks(["a", "b", "c", "d"], "z");
+  assert.deepEqual(inj2, ["a", "b", "c"]);
+  // empty result when only the primary remains
+  assert.deepEqual(buildInjectedFallbacks(["a"], "a"), []);
 });
 
 // CASE 5: fallback ordering - free first, then opencode-go, etc.
