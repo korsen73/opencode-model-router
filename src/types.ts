@@ -23,6 +23,19 @@ export interface CatalogModel {
   supported_parameters?: string[];
   architecture?: { modality?: string; input_modalities?: string[]; output_modalities?: string[] };
   created?: number;
+  canonical_slug?: string;
+  description?: string;
+  expiration_date?: string;
+  top_provider?: string;
+  reasoning?: unknown;
+  /** Artificial Analysis benchmarks from OpenRouter. */
+  benchmarks?: {
+    artificial_analysis?: {
+      intelligence_index?: number | null;
+      coding_index?: number | null;
+      agentic_index?: number | null;
+    };
+  };
 }
 
 /** Local registry record (models.json). */
@@ -39,6 +52,27 @@ export interface RegistryModel {
   stale: boolean;
   discoveredAt: number;
   lastUsedAt?: number;
+  /** Normalized capability scores from OpenRouter Artificial Analysis (null = missing, never 0). */
+  scores?: { intelligence: number | null; coding: number | null; agentic: number | null };
+  /** Normalized capability flags independent of provider. */
+  normalizedCapabilities?: {
+    tools: boolean;
+    reasoning: boolean;
+    structured_outputs: boolean;
+    input_modalities: string[];
+    output_modalities: string[];
+  };
+  /** Retained raw OpenRouter metadata for audit/explainability. */
+  metadata?: {
+    canonical_slug?: string;
+    name?: string;
+    description?: string;
+    created?: number;
+    expiration_date?: string;
+    top_provider?: string;
+    reasoning?: unknown;
+    architecture?: { modality?: string; input_modalities?: string[]; output_modalities?: string[] };
+  };
 }
 
 export interface RegistryFile {
@@ -55,9 +89,21 @@ export interface ProviderHealth {
   cooldownUntil?: number;
 }
 
+export interface EndpointInfo {
+  provider_name: string;
+  status: number | null;
+  uptime_last_5m: number | null;
+  uptime_last_30m: number | null;
+  uptime_last_1d: number | null;
+  latency_last_30m: unknown;
+  throughput_last_30m: unknown;
+}
+
 export interface HealthFile {
   providers: Record<string, ProviderHealth>;
   models: Record<string, { state: HealthState; cooldownUntil?: number; reason?: string }>;
+  /** Per-model endpoint health (dynamic, TTL-cached). */
+  endpoints?: Record<string, { endpoints: EndpointInfo[]; fetchedAt: number }>;
   updatedAt: number;
 }
 
@@ -86,6 +132,8 @@ export interface RouterConfig {
     apiKeyEnv: string;
     timeoutMs: number;
   };
+  /** TTL (seconds) for per-model endpoint health; refreshed dynamically, not daily. */
+  endpointHealthTtlSeconds: number;
   dailyReset: { hour: number; minute: number };
   payg: {
     enabled: boolean;

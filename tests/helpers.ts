@@ -19,6 +19,7 @@ export function baseConfig(): RouterConfig {
       timeoutMs: 15000,
     },
     dailyReset: { hour: 0, minute: 0 },
+    endpointHealthTtlSeconds: 300,
     payg: {
       enabled: false,
       maxCostPerMillionInput: null,

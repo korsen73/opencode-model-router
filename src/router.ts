@@ -8,6 +8,7 @@ import { readJson, writeJson, now, iso } from "./io.ts";
 import { discoverModels, fetchModels, markStale, type FetchLike } from "./discover.ts";
 import { filterModel, filterPreferred as filterByCap, type Filtered } from "./filter.ts";
 import { classifyWithOverrides } from "./classify.ts";
+import { enrichRegistryModel } from "./catalog.ts";
 import { decideProvider } from "./fallback.ts";
 import { loadHealth, saveHealth, defaultHealthFile, effectiveState } from "./health.ts";
 import { recordUsage } from "./usage.ts";
@@ -18,6 +19,7 @@ import type {
   Decision,
   HealthState,
   RegistryFile,
+  RegistryModel,
   RouterConfig,
   Tier,
   UsageFile,
@@ -56,7 +58,7 @@ export async function refreshModels(
     const f = filterModel(cm, config);
     if (!f) continue;
     if (!existing.has(cm.id)) {
-      reg.discovered.push({
+      const base: RegistryModel = {
         id: cm.id,
         providerID: "openrouter",
         isFree: f.isFree,
@@ -68,8 +70,16 @@ export async function refreshModels(
         status: "discovered",
         stale: false,
         discoveredAt: now(),
-      });
+      };
+      reg.discovered.push(enrichRegistryModel(base, cm));
       added++;
+    } else {
+      // Re-enrich existing entries so raw metadata + normalized scores are
+      // refreshed on each catalog refresh (in case OpenRouter updated them).
+      const i = reg.discovered.findIndex((m) => m.id === cm.id);
+      if (i >= 0) {
+        reg.discovered[i] = enrichRegistryModel(reg.discovered[i] as RegistryModel, cm);
+      }
     }
   }
 
