@@ -115,6 +115,22 @@ test("CASE 4b: fisher-yates no duplicates and complete", () => {
   }
 });
 
+// CASE 4c: chain length is hard-clamped to OPENROUTER_MODELS_MAX (3),
+// regardless of the config value. OpenRouter rejects >3-item models[] arrays.
+test("CASE 4c: buildFreeChain clamps to OPENROUTER_MODELS_MAX (3) even when config is larger", () => {
+  const pool = toFiltered(
+    filterModel(freeFixtures[0], cfg), // qwen
+    filterModel(freeFixtures[1], cfg), // deepseek-r1
+    filterModel(freeFixtures[3], cfg), // kimi
+    filterModel(makeModel({ id: "extra/one:free", supported_parameters: ["tools"] }), cfg),
+    filterModel(makeModel({ id: "extra/two:free", supported_parameters: ["tools"] }), cfg),
+  );
+  // 5 distinct models, config says allow 5, but the hard ceiling is 3.
+  const chain = buildFreeChain(pool, { enabled: false, maxChain: 5 });
+  assert.ok(chain.models.length <= 3, `should clamp to 3, got ${chain.models.length}`);
+  assert.equal(chain.truncated, true);
+});
+
 // CASE 5: fallback ordering - free first, then opencode-go, etc.
 test("CASE 5: fallback ordering", () => {
   const pool = toFiltered(...freeFixtures.map((m) => filterModel(m, cfg)));

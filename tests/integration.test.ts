@@ -139,16 +139,26 @@ test("CASE I3: no agent .md hard-codes Free model IDs", () => {
   assert.equal(violations, 0, `${violations} agent .md file(s) contain Free model IDs`);
 });
 
-// CASE I4: chain length <= maxFreeModelsPerChain (4) and no duplicates
-test("CASE I4: chain <= 4 and no duplicates", async () => {
+// CASE I4: chain length <= 3 (OpenRouter limit) and no duplicates.
+test("CASE I4: chain <= 3 (OpenRouter limit) and no duplicates", async () => {
   const cfg = baseConfig();
   await seedRegistry();
   await clearCooldown("openrouter");
   for (let r = 0; r < 10; r++) {
     const d = await decide(cfg, "coder");
-    assert.ok(d.chain.length <= cfg.maxFreeModelsPerChain, `chain too long: ${d.chain.length}`);
+    // Hard invariant: never exceed OpenRouter's 3-item models[] limit.
+    assert.ok(d.chain.length <= 3, `chain too long: ${d.chain.length}`);
     assert.equal(new Set(d.chain).size, d.chain.length, "chain has duplicates");
   }
+});
+
+// CASE I4b: a config value > 3 is clamped down to 3 (defensive invariant).
+test("CASE I4b: config maxFreeModelsPerChain > 3 is clamped to 3", async () => {
+  const cfg = { ...baseConfig(), maxFreeModelsPerChain: 5 };
+  await seedRegistry();
+  await clearCooldown("openrouter");
+  const d = await decide(cfg, "coder");
+  assert.ok(d.chain.length <= 3, `config=5 should clamp to 3, got ${d.chain.length}`);
 });
 
 // CASE I5: randomization produces varied orders across runs

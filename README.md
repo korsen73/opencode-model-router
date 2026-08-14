@@ -24,6 +24,8 @@ locally-observed usage.
   the expected Free upstream).
 - Per-request randomized Free fallback chain is injected via `chat.params` →
   `output.options.models` (OpenRouter server-side `models` array). Verified.
+  The chain is hard-capped at 3 items (`OPENROUTER_MODELS_MAX`); OpenRouter
+  rejects longer `models[]` arrays (live-verified HTTP 400).
 - Actual model+provider+cost observed via the `event` hook and logged.
 - Coding Free models are correctly classified (explicit coding signal before the
   reasoning heuristic). `cohere/north-mini-code:free` is now coding; 10 of 15
@@ -42,6 +44,12 @@ locally-observed usage.
   502/504). The chain helps, but the Free tier is not guaranteed-reliable.
 - The running desktop app (OpenCode.app) may hold a stale config/server cache; a
   CLI `opencode run` can route to the old config until the server restarts.
+- **Observability**: the `event` hook records `modelID` as reported by opencode,
+  which for routed agents is the virtual ID (e.g. `free-reasoning`), not the
+  resolved `api.id` Free model. Recording the resolved `api.id` would require a
+  per-event async registry+decision lookup (expensive in the streaming hot path)
+  and would only reflect the *intended* primary, not the model OpenRouter
+  actually executed on after server-side fallback. Known limitation; left as-is.
 
 ### FUTURE
 - Refresh virtual models periodically (not just at plugin load / catalog refresh).
@@ -107,7 +115,8 @@ node cli.mjs decide coder
 ## Config (`config.json`)
 
 - `providerOrder`: `["free","opencode-go","deepseek/zai","payg"]`
-- `randomizeFreeModels` (default `true`), `maxFreeModelsPerChain` (default `4`)
+- `randomizeFreeModels` (default `true`), `maxFreeModelsPerChain` (default `3` —
+  OpenRouter's hard limit; see below)
 - `freeModelCooldownSeconds` (default `300`)
 - `discovery`: url, `refreshHours` (default `24`), `apiKeyEnv`, `timeoutMs`
 - `dailyReset`: `{hour, minute}` local-timezone reset
@@ -152,7 +161,10 @@ Verified: 15 free models detected from the live catalog.
 
 ## Randomization
 Fisher-Yates unbiased shuffle over the Free pool only (when enabled), truncated to
-`maxFreeModelsPerChain`. Verified unbiased and duplicate-free by unit tests.
+`maxFreeModelsPerChain`, which is hard-clamped to **3** (`OPENROUTER_MODELS_MAX`)
+regardless of config — OpenRouter's native `models` fallback array rejects more
+than 3 items (live-verified HTTP 400: "'models' array must have 3 items or
+fewer."). Verified unbiased and duplicate-free by unit tests.
 
 ## Fallback logic
 1. Free tier → randomized chain of free models (OpenRouter server-side failover).
@@ -214,7 +226,8 @@ Integration (I1-I10):
   coder/debugger/tester/quant/reviewer/chat)
 - I2: expert stays on `opencode-go/gpt-5.6-luna`
 - I3: no agent `.md` hard-codes Free model IDs
-- I4: chain ≤ 4 and no duplicates
+- I4: chain ≤ 3 (OpenRouter limit) and no duplicates
+- I4b: config `maxFreeModelsPerChain` > 3 is clamped to 3
 - I5: randomization produces varied primaries
 - I6: unsuitable models excluded (below floor / paid / meta-routing)
 - I7: `topFreePickForCapability` returns a valid current Free model
@@ -235,6 +248,10 @@ Integration (I1-I10):
 - **OpenRouter Free 502/504**: Free upstreams are frequently exhausted; the
   fallback chain handles failover, but transient failures are expected. Cooldown
   is applied on error to avoid hammering.
+- **`models` array rejected (HTTP 400 "3 items or fewer")**: the chain is
+  hard-clamped to 3 (`OPENROUTER_MODELS_MAX`) in code, so this should not happen.
+  If it does, it means the clamp was bypassed — investigate, don't raise the cap
+  above 3.
 
 ## Known OpenCode limitations
 - **No mid-request cross-provider switching** (1.18.10). Only OpenRouter's

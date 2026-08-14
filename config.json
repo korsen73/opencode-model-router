@@ -5,7 +5,7 @@
   "providerOrder": ["free", "opencode-go", "deepseek/zai", "payg"],
 
   "randomizeFreeModels": true,
-  "maxFreeModelsPerChain": 4,
+  "maxFreeModelsPerChain": 3,
   "freeModelCooldownSeconds": 300,
 
   "discovery": {

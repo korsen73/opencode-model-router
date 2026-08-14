@@ -22,3 +22,11 @@ The only TRUE per-request fallback execution path available is OpenRouter's nati
 - Free→free failover within OpenRouter is real (server-side).
 - PAYG is guarded by cost ceilings and defaults to disabled.
 - This is the honest, verified mechanism; no fake per-request cross-provider swap.
+
+## Update (3-item limit)
+OpenRouter's native `models` fallback array accepts **AT MOST 3 items**
+(live-verified: a 4-item chain returned HTTP 400 "'models' array must have 3
+items or fewer."). The chain is now hard-clamped to `OPENROUTER_MODELS_MAX = 3`
+in `src/randomize.ts` regardless of config, and `maxFreeModelsPerChain` defaults
+to 3 in `config.json`. This is a defensive invariant so a future config edit above
+3 can never produce a rejected request.
