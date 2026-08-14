@@ -1,0 +1,100 @@
+{
+  "$comment": "Model router configuration for OpenCode 1.18.10. Routing logic lives here, NOT in agent markdown. All model IDs in 'preferred' are name-substring HINTS filtered against the live catalog; they are never assumed to exist.",
+  "version": 1,
+
+  "providerOrder": ["free", "opencode-go", "deepseek/zai", "payg"],
+
+  "randomizeFreeModels": true,
+  "maxFreeModelsPerChain": 4,
+  "freeModelCooldownSeconds": 300,
+
+  "discovery": {
+    "url": "https://openrouter.ai/api/v1/models",
+    "refreshHours": 24,
+    "apiKeyEnv": "OPENROUTER_API_KEY",
+    "timeoutMs": 15000
+  },
+
+  "dailyReset": {
+    "hour": 0,
+    "minute": 0
+  },
+
+  "payg": {
+    "enabled": false,
+    "maxCostPerMillionInput": null,
+    "maxCostPerMillionOutput": null,
+    "maxCostPerRequestUSD": 0.1
+  },
+
+  "qualityFloor": {
+    "minContext": 32000,
+    "tools": true
+  },
+
+  "capabilities": {
+    "coding": {
+      "minContext": 64000,
+      "tools": true,
+      "preferred": ["qwen", "deepseek", "kimi", "glm", "gpt-oss", "nemotron"]
+    },
+    "reasoning": {
+      "minContext": 64000,
+      "tools": true,
+      "preferred": ["qwen", "deepseek-r1", "kimi", "gemini", "glm"]
+    },
+    "general": {
+      "minContext": 32000,
+      "tools": true,
+      "preferred": []
+    },
+    "chat": {
+      "minContext": 32000,
+      "tools": false,
+      "preferred": ["nemotron", "qwen", "deepseek"]
+    }
+  },
+
+  "agentCapability": {
+    "manager": "reasoning",
+    "planner": "reasoning",
+    "builder": "coding",
+    "coder": "coding",
+    "debugger": "coding",
+    "tester": "coding",
+    "quant": "reasoning",
+    "reviewer": "reasoning",
+    "expert": "reasoning",
+    "chat": "chat"
+  },
+
+  "providers": {
+    "free": {
+      "providerID": "openrouter",
+      "tier": "free",
+      "label": "OpenRouter Free"
+    },
+    "opencode-go": {
+      "providerID": "opencode-go",
+      "tier": "opencode-go",
+      "label": "OpenCode Go"
+    },
+    "deepseek/zai": {
+      "providerID": "deepseek",
+      "tier": "deepseek/zai",
+      "label": "DeepSeek / Z.ai"
+    },
+    "payg": {
+      "providerID": "openrouter",
+      "tier": "payg",
+      "label": "OpenRouter PAYG"
+    }
+  },
+
+  "providerHealth": {
+    "free": "AVAILABLE",
+    "opencode-go": "AVAILABLE",
+    "deepseek/zai": "CONFIGURATION_ERROR",
+    "payg": "DISABLED"
+  }
+}

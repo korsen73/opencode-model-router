@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Runtime state / local data (never share)
+models.json
+models-cache.json
+status.json
+usage.json
+logs/
+classify-overrides.json
+
+# Secrets / env
+.env
+.env.*
+*.key
+!*.pub
+
+# OS / editor
+.DS_Store

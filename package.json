@@ -1,0 +1,15 @@
+{
+  "name": "opencode-model-router",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Model router for OpenCode 1.18.10: free-model discovery, capability classification, OpenRouter fallback-chain injection, usage/health tracking.",
+  "scripts": {
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "@types/node": "^24.0.0"
+  }
+}
